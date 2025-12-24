@@ -16,4 +16,4 @@ app.include_router(predictions.router)
 
 @app.get("/", tags=["Health"])
 def health_check():
-    return {"status": "active", "version": "2.0.0"}
+    return {"status": "active", "version": "1.0.0"}

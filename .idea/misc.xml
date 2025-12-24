@@ -3,5 +3,5 @@
   <component name="Black">
     <option name="sdkName" value="Python 3.13 (ML-SPK-Stroke)" />
   </component>
-  <component name="ProjectRootManager" version="2" project-jdk-name="Python 3.13 (ML-SPK-Stroke)" project-jdk-type="Python SDK" />
+  <component name="ProjectRootManager" version="2" project-jdk-name="Python 3.13 (FastAPI-SPK-Stroke)" project-jdk-type="Python SDK" />
 </project>

@@ -1,11 +1,174 @@
-# Test your FastAPI endpoints
+### Configuration
+@host = http://127.0.0.1:8000
+@email = testuser@example.com
+@password = secretpassword123
 
-GET http://127.0.0.1:8000/
+# ==========================================
+# 1. Health Check
+# ==========================================
+
+### Get Root / Health Check
+GET {{host}}/
 Accept: application/json
 
 ###
 
-GET http://127.0.0.1:8000/hello/User
+# ==========================================
+# 2. Authentication
+# ==========================================
+
+### Register a new user
+POST {{host}}/auth/register
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "password": "{{password}}",
+  "full_name": "Test User"
+}
+
+###
+
+### Login to get Access Token
+POST {{host}}/auth/token
+Content-Type: application/x-www-form-urlencoded
+
+username={{email}}&password={{password}}
+
+> {%
+    client.global.set("auth_token", response.body.access_token);
+    client.log("Token acquired: " + response.body.access_token);
+%}
+
+###
+
+# ==========================================
+# 3. User Profile (Requires Auth)
+# ==========================================
+
+### Get Current User Profile
+GET {{host}}/users/me
+Authorization: Bearer {{auth_token}}
 Accept: application/json
 
 ###
+
+### Update User Personal Defaults
+PUT {{host}}/users/me/defaults
+Authorization: Bearer {{auth_token}}
+Content-Type: application/json
+
+{
+  "age": 45,
+  "high_blood_pressure": 1
+}
+
+###
+
+# ==========================================
+# 4. Predictions (Requires Auth)
+# ==========================================
+
+### Predict using Logistic Regression
+POST {{host}}/predict/logistic
+Authorization: Bearer {{auth_token}}
+Content-Type: application/json
+
+{
+  "chest_pain": 1,
+  "shortness_of_breath": 0,
+  "irregular_heartbeat": 1,
+  "fatigue_weakness": 1,
+  "dizziness": 1,
+  "swelling_edema": 0,
+  "pain_neck_jaw": 1,
+  "excessive_sweating": 0,
+  "persistent_cough": 1,
+  "nausea_vomiting": 1,
+  "high_blood_pressure": 1,
+  "chest_discomfort_activity": 0,
+  "cold_hands_feet": 1,
+  "snoring_sleep_apnea": 1,
+  "anxiety_feeling_doom": 1,
+  "age": 65,
+  "stroke_risk_percentage": 55.0
+}
+
+###
+
+### Predict using Random Forest
+POST {{host}}/predict/random_forest
+Authorization: Bearer {{auth_token}}
+Content-Type: application/json
+
+{
+  "chest_pain": 0,
+  "shortness_of_breath": 1,
+  "irregular_heartbeat": 0,
+  "fatigue_weakness": 1,
+  "dizziness": 0,
+  "swelling_edema": 1,
+  "pain_neck_jaw": 0,
+  "excessive_sweating": 1,
+  "persistent_cough": 0,
+  "nausea_vomiting": 0,
+  "high_blood_pressure": 1,
+  "chest_discomfort_activity": 1,
+  "cold_hands_feet": 0,
+  "snoring_sleep_apnea": 1,
+  "anxiety_feeling_doom": 0,
+  "age": 72,
+  "stroke_risk_percentage": 82.5
+}
+
+###
+
+### Predict using SVM
+POST {{host}}/predict/svm
+Authorization: Bearer {{auth_token}}
+Content-Type: application/json
+
+{
+  "chest_pain": 0,
+  "shortness_of_breath": 0,
+  "irregular_heartbeat": 0,
+  "fatigue_weakness": 0,
+  "dizziness": 0,
+  "swelling_edema": 0,
+  "pain_neck_jaw": 0,
+  "excessive_sweating": 0,
+  "persistent_cough": 0,
+  "nausea_vomiting": 0,
+  "high_blood_pressure": 0,
+  "chest_discomfort_activity": 0,
+  "cold_hands_feet": 0,
+  "snoring_sleep_apnea": 0,
+  "anxiety_feeling_doom": 0,
+  "age": 30,
+  "stroke_risk_percentage": 10.0
+}
+
+###
+
+# ==========================================
+# 5. History (Requires Auth)
+# ==========================================
+
+### Get Prediction History
+GET {{host}}/predict/history
+Authorization: Bearer {{auth_token}}
+Accept: application/json
+
+> {%
+    if (response.body.length > 0) {
+        client.global.set("history_id", response.body[0].id);
+        client.log("Captured History ID: " + response.body[0].id);
+    }
+%}
+
+###
+
+### Get Specific Prediction Detail
+GET {{host}}/predict/history/{{history_id}}
+Authorization: Bearer {{auth_token}}
+Accept: application/json
