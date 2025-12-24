@@ -15,7 +15,7 @@ RUN /code/venv/bin/pip install --upgrade pip
 RUN /code/venv/bin/pip install --no-cache-dir --upgrade -r /code/requirements.txt
 
 # Copy the rest of the application code
-COPY ./app /code/app
+COPY ./ /code/app
 COPY .env /code/.env
 
 # Command to run the application
