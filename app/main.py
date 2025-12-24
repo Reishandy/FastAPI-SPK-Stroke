@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 
-from routers import auth, users, predictions
+from app.routers import auth, users, predictions
 
 app = FastAPI(
     title="Stroke Risk Prediction API",

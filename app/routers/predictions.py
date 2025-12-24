@@ -7,9 +7,9 @@ import numpy as np
 from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException
 
-from database import prediction_logs_collection
-from routers.users import get_current_user
-from schemas import ModelType, StrokeInput, PredictionOutput, PredictionHistoryItem, PredictionDetail
+from app.database import prediction_logs_collection
+from app.routers.users import get_current_user
+from app.schemas import ModelType, StrokeInput, PredictionOutput, PredictionHistoryItem, PredictionDetail
 
 # --- Configuration ---
 MODEL_DIR = "models"

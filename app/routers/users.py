@@ -3,9 +3,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jwt import PyJWTError as JWTError
 
-from database import users_collection, fix_id
-from schemas import UserResponse, PersonalDefaults
-from security import SECRET_KEY, ALGORITHM
+from app.database import users_collection, fix_id
+from app.schemas import UserResponse, PersonalDefaults
+from app.security import SECRET_KEY, ALGORITHM
 
 router = APIRouter(prefix="/users", tags=["User Profile"])
 
