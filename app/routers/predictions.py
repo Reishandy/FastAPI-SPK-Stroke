@@ -12,7 +12,7 @@ from app.routers.users import get_current_user
 from app.schemas import ModelType, StrokeInput, PredictionOutput, PredictionHistoryItem, PredictionDetail
 
 # --- Configuration ---
-MODEL_DIR = "models"
+MODEL_DIR = "app/models"
 MODELS_MAP = {
     "logistic": "model_logistic_regression.pkl",
     "random_forest": "model_random_forest.pkl",
