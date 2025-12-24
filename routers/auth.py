@@ -1,31 +1,45 @@
-from datetime import timedelta
+from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
-from schemas import Token
-from security import verify_password, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES
+from schemas import Token, UserCreate, UserResponse
+from security import verify_password, get_password_hash, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES
+from database import users_collection, fix_id
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
-# --- TODO: MOCK DATABASE ---
-# Pre-hashed password for "secret" is: $2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW
-fake_users_db = {
-    "test@example.com": {
-        "id": "user_001",
-        "email": "test@example.com",
-        "full_name": "Test User",
-        # Use a pre-computed bcrypt hash literal to avoid hashing at import time
-        # (which can trigger backend/bcrypt issues in some environments).
-        "hashed_password": "$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW",
-        "disabled": False,
-        "personal_defaults": {"age": 65, "high_blood_pressure": 1}
+
+@router.post("/register", response_model=UserResponse)
+async def register_user(user: UserCreate):
+    # 1. Check if user exists
+    existing_user = await users_collection.find_one({"email": user.email})
+    if existing_user:
+        raise HTTPException(
+            status_code=400,
+            detail="Email already registered"
+        )
+
+    # 2. Hash password and prepare document
+    hashed_password = get_password_hash(user.password)
+    user_doc = {
+        "email": user.email,
+        "hashed_password": hashed_password,
+        "full_name": user.full_name,
+        "created_at": datetime.utcnow(),
+        "personal_defaults": {}  # Empty defaults initially
     }
-}
+
+    # 3. Insert into DB
+    result = await users_collection.insert_one(user_doc)
+
+    # 4. Return created user
+    created_user = await users_collection.find_one({"_id": result.inserted_id})
+    return fix_id(created_user)
 
 
 @router.post("/token", response_model=Token)
 async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
-    # 1. Find user
-    user = fake_users_db.get(form_data.username)  # OAuth2 form sends 'username' (we use email)
+    # 1. Find user (OAuth2 spec says form field is 'username', we treat it as email)
+    user = await users_collection.find_one({"email": form_data.username})
 
     # 2. Verify password
     if not user or not verify_password(form_data.password, user["hashed_password"]):

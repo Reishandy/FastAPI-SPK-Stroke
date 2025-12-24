@@ -2,13 +2,14 @@ import os
 import joblib
 import numpy as np
 from datetime import datetime
-from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import List, Optional
+from fastapi import APIRouter, Depends, HTTPException
+from bson import ObjectId
 from schemas import ModelType, StrokeInput, PredictionOutput, PredictionHistoryItem, PredictionDetail
-from routers.users import get_current_user  # Protected Dependency
+from routers.users import get_current_user
+from database import prediction_logs_collection, fix_id
 
 # --- Configuration ---
-# Assuming you run uvicorn from the root project folder
 MODEL_DIR = "models"
 MODELS_MAP = {
     "logistic": "model_logistic_regression.pkl",
@@ -17,26 +18,16 @@ MODELS_MAP = {
 }
 SCALER_FILE = "scaler_stroke.pkl"
 
-# --- Global State for ML Artifacts ---
+# Global State
 loaded_models = {}
 scaler = None
-
-# --- Mock Database for History ---
-# In a real app, this would be a MongoDB collection
-fake_prediction_db = []
 
 router = APIRouter(prefix="/predict", tags=["Prediction & History"])
 
 
 # --- Helper Functions ---
-
 def load_artifacts():
-    """
-    Load models and scaler if they aren't already loaded.
-    """
     global scaler, loaded_models
-
-    # 1. Load Scaler
     if scaler is None:
         scaler_path = os.path.join(MODEL_DIR, SCALER_FILE)
         if os.path.exists(scaler_path):
@@ -45,54 +36,30 @@ def load_artifacts():
         else:
             print(f"[Error] Scaler not found at {scaler_path}")
 
-    # 2. Load Models
     for model_name, filename in MODELS_MAP.items():
         if model_name not in loaded_models:
             path = os.path.join(MODEL_DIR, filename)
             if os.path.exists(path):
                 loaded_models[model_name] = joblib.load(path)
                 print(f"[System] Loaded Model: {model_name}")
-            else:
-                print(f"[Warning] Model {model_name} not found at {path}")
 
 
 def preprocess_input(input_data: StrokeInput) -> np.ndarray:
-    """
-    Converts Pydantic input to the numpy array format expected by the model.
-    Logic taken from original main.py.
-    """
     if scaler is None:
         raise HTTPException(status_code=500, detail="Scaler is not loaded.")
 
-    # 1. Extract Binary Features (Order matters!)
     binary_features = [
-        input_data.chest_pain,
-        input_data.shortness_of_breath,
-        input_data.irregular_heartbeat,
-        input_data.fatigue_weakness,
-        input_data.dizziness,
-        input_data.swelling_edema,
-        input_data.pain_neck_jaw,
-        input_data.excessive_sweating,
-        input_data.persistent_cough,
-        input_data.nausea_vomiting,
-        input_data.high_blood_pressure,
-        input_data.chest_discomfort_activity,
-        input_data.cold_hands_feet,
-        input_data.snoring_sleep_apnea,
-        input_data.anxiety_feeling_doom
+        input_data.chest_pain, input_data.shortness_of_breath, input_data.irregular_heartbeat,
+        input_data.fatigue_weakness, input_data.dizziness, input_data.swelling_edema,
+        input_data.pain_neck_jaw, input_data.excessive_sweating, input_data.persistent_cough,
+        input_data.nausea_vomiting, input_data.high_blood_pressure,
+        input_data.chest_discomfort_activity, input_data.cold_hands_feet,
+        input_data.snoring_sleep_apnea, input_data.anxiety_feeling_doom
     ]
 
-    # 2. Extract Numerical Features
     numerical_features = [[input_data.age, input_data.stroke_risk_percentage]]
-
-    # 3. Scale Numerical Features
     scaled_numerical = scaler.transform(numerical_features)
-
-    # 4. Concatenate [Binary... , Scaled_Age, Scaled_Risk]
-    # binary_features needs to be 2D array (1, 15) to concatenate with (1, 2)
     final_input = np.concatenate([np.array([binary_features]), scaled_numerical], axis=1)
-
     return final_input
 
 
@@ -126,6 +93,7 @@ async def predict_stroke_risk(
 
         # 4. Get Probability (if available)
         probs = None
+        prob_at_risk = 0.0
         if hasattr(model, "predict_proba"):
             prob_array = model.predict_proba(processed_data)[0]
             # Assuming class 0 = Not At Risk, class 1 = At Risk
@@ -133,31 +101,36 @@ async def predict_stroke_risk(
                 "not_at_risk": float(prob_array[0]),
                 "at_risk": float(prob_array[1])
             }
+            prob_at_risk = float(prob_array[1])
 
-        # 5. Construct Result
-        result_data = {
+        # Result object structure
+        result_obj = {
+            "label": "At Risk" if prediction == 1 else "Not At Risk",
+            "score": int(prediction),
+            "probability_at_risk": prob_at_risk
+        }
+
+        # SAVE TO DB (as per requested schema)
+        log_entry = {
+            "user_id": ObjectId(current_user["id"]),
+            "timestamp": datetime.utcnow(),
+            "model_version": "2.0.0",  # Hardcoded or dynamic
             "model_used": model_type.value,
-            "prediction_label": "At Risk" if prediction == 1 else "Not At Risk",
-            "prediction_score": int(prediction),
+            "input_data": input_data.dict(),
+            "result": result_obj
+        }
+
+        await prediction_logs_collection.insert_one(log_entry)
+
+        # Return response matching the Pydantic schema
+        return {
+            "model_used": model_type.value,
+            "prediction_label": result_obj["label"],
+            "prediction_score": result_obj["score"],
             "probability": probs
         }
 
-        # 6. SAVE TO HISTORY (Mock DB Operation)
-        # In Mongo: await db.prediction_logs.insert_one(log_entry)
-        log_entry = {
-            "id": f"log_{len(fake_prediction_db) + 1}",
-            "user_email": current_user["email"],  # Link to user
-            "timestamp": datetime.utcnow().isoformat(),
-            "input_data": input_data.dict(),
-            **result_data  # Flattens model_used, label, score, probability
-        }
-        fake_prediction_db.append(log_entry)
-        print(f"[DB] Saved prediction for user {current_user['email']}")
-
-        return result_data
-
     except Exception as e:
-        # Log the full error to console for debugging
         print(f"Prediction Error: {e}")
         raise HTTPException(status_code=500, detail=f"Prediction failed: {str(e)}")
 
@@ -168,38 +141,53 @@ async def get_prediction_history(
         limit: int = 10,
         current_user: dict = Depends(get_current_user)
 ):
-    """
-    Retrieve past predictions for the logged-in user.
-    """
-    # 1. Filter DB for current user
-    user_logs = [log for log in fake_prediction_db if log["user_email"] == current_user["email"]]
+    cursor = prediction_logs_collection.find(
+        {"user_id": ObjectId(current_user["id"])}
+    ).sort("timestamp", -1).skip(skip).limit(limit)
 
-    # 2. Apply pagination (skip/limit) -> Sort by newest first usually
-    # For mock list, we just slice. 
-    # In Mongo: find({'user_id': ...}).sort('timestamp', -1).skip(skip).limit(limit)
-    start = len(user_logs) - skip - limit
-    end = len(user_logs) - skip
+    logs = []
+    async for doc in cursor:
+        # Map DB structure back to Pydantic Response
+        logs.append(PredictionHistoryItem(
+            id=str(doc["_id"]),
+            timestamp=doc["timestamp"].isoformat(),
+            model_used=doc["model_used"],
+            prediction_label=doc["result"]["label"],
+            prediction_score=doc["result"]["score"]
+        ))
 
-    # Simple list slicing for mock purposes (reversing to show newest first)
-    user_logs_sorted = user_logs[::-1]
-    paginated_logs = user_logs_sorted[skip: skip + limit]
-
-    return paginated_logs
+    return logs
 
 
 @router.get("/history/{log_id}", response_model=PredictionDetail)
 async def get_history_detail(log_id: str, current_user: dict = Depends(get_current_user)):
-    """
-    Get full details of a specific prediction.
-    """
-    # 1. Find log
-    log = next((item for item in fake_prediction_db if item["id"] == log_id), None)
+    try:
+        obj_id = ObjectId(log_id)
+    except:
+        raise HTTPException(status_code=400, detail="Invalid Log ID")
 
-    # 2. Security Check: Does log exist and belong to user?
+    log = await prediction_logs_collection.find_one({
+        "_id": obj_id,
+        "user_id": ObjectId(current_user["id"])
+    })
+
     if not log:
         raise HTTPException(status_code=404, detail="History item not found")
 
-    if log["user_email"] != current_user["email"]:
-        raise HTTPException(status_code=403, detail="Not authorized to view this record")
+    # Reconstruct probability dict from stored 'probability_at_risk' if needed,
+    # or just return None if strict reconstruction isn't possible/needed for detail view.
+    # Here we approximate to fit the schema.
+    p_at_risk = log["result"].get("probability_at_risk", 0.0)
 
-    return log
+    return PredictionDetail(
+        id=str(log["_id"]),
+        timestamp=log["timestamp"].isoformat(),
+        model_used=log["model_used"],
+        prediction_label=log["result"]["label"],
+        prediction_score=log["result"]["score"],
+        input_data=log["input_data"],
+        probability={
+            "at_risk": p_at_risk,
+            "not_at_risk": 1.0 - p_at_risk
+        }
+    )

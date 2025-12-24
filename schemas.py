@@ -1,6 +1,8 @@
 from enum import Enum
-from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, Field, EmailStr
+from typing import Optional, Dict
+
+from pydantic import BaseModel, Field, EmailStr, ConfigDict
+
 
 # --- Enums ---
 class ModelType(str, Enum):
@@ -8,21 +10,24 @@ class ModelType(str, Enum):
     random_forest = "random_forest"
     svm = "svm"
 
+
 # --- Auth & User Schemas ---
 class Token(BaseModel):
     access_token: str
     token_type: str
+
 
 class UserCreate(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=8)
     full_name: str
 
+
 class PersonalDefaults(BaseModel):
     """Data to auto-fill forms based on user history."""
     age: Optional[int] = Field(None, ge=18, le=100)
     high_blood_pressure: Optional[int] = Field(None, ge=0, le=1)
-    # Add other common defaults if needed
+
 
 class UserResponse(BaseModel):
     id: str
@@ -30,7 +35,8 @@ class UserResponse(BaseModel):
     full_name: str
     personal_defaults: Optional[PersonalDefaults] = None
 
-# --- Prediction Schemas (Migrated from your main.py) ---
+
+# --- Prediction Schemas ---
 class StrokeInput(BaseModel):
     # Binary Symptoms (0 or 1)
     chest_pain: int = Field(..., description="1 if Chest Pain present, else 0", ge=0, le=1)
@@ -53,8 +59,9 @@ class StrokeInput(BaseModel):
     age: int = Field(..., description="Age of the patient", ge=18, le=100)
     stroke_risk_percentage: float = Field(..., description="Estimated Stroke Risk Percentage (0-100)", ge=0.0, le=100.0)
 
-    class Config:
-        schema_extra = {
+    # UPDATED FOR PYDANTIC V2
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "chest_pain": 1,
                 "shortness_of_breath": 0,
@@ -75,6 +82,8 @@ class StrokeInput(BaseModel):
                 "stroke_risk_percentage": 55.0
             }
         }
+    )
+
 
 class PredictionOutput(BaseModel):
     model_used: str
@@ -82,12 +91,14 @@ class PredictionOutput(BaseModel):
     prediction_score: int
     probability: Optional[Dict[str, float]] = None
 
+
 class PredictionHistoryItem(BaseModel):
     id: str
     timestamp: str
     model_used: str
     prediction_label: str
     prediction_score: int
+
 
 class PredictionDetail(PredictionHistoryItem):
     input_data: StrokeInput
