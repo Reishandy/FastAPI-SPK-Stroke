@@ -1,13 +1,15 @@
 import os
+from datetime import datetime
+from typing import List
+
 import joblib
 import numpy as np
-from datetime import datetime
-from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException
 from bson import ObjectId
-from schemas import ModelType, StrokeInput, PredictionOutput, PredictionHistoryItem, PredictionDetail
+from fastapi import APIRouter, Depends, HTTPException
+
+from database import prediction_logs_collection
 from routers.users import get_current_user
-from database import prediction_logs_collection, fix_id
+from schemas import ModelType, StrokeInput, PredictionOutput, PredictionHistoryItem, PredictionDetail
 
 # --- Configuration ---
 MODEL_DIR = "models"

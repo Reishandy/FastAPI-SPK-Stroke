@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+
 from routers import auth, users, predictions
 
 app = FastAPI(
@@ -11,6 +12,7 @@ app = FastAPI(
 app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(predictions.router)
+
 
 @app.get("/", tags=["Health"])
 def health_check():

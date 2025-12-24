@@ -1,6 +1,7 @@
 import os
-from motor.motor_asyncio import AsyncIOMotorClient
+
 from dotenv import load_dotenv
+from motor.motor_asyncio import AsyncIOMotorClient
 
 # Load environment variables
 load_dotenv()
@@ -14,6 +15,7 @@ db = client[DB_NAME]
 # Collections
 users_collection = db["users"]
 prediction_logs_collection = db["prediction_logs"]
+
 
 # Helper to fix ObjectId serialization for Pydantic
 def fix_id(doc):
